@@ -33,7 +33,7 @@ chmod +x ~/.hermes/scripts/tg-monitor.py
 cat > ~/.hermes/scripts/tg-monitor-wrapper.sh << 'EOF'
 #!/bin/bash
 export CHANNELS="nyachang_uslugi"
-export KEYWORDS="ищу|нужен|требуется|работа|услуг|помогите"
+export KEYWORDS="dj|диджей|controller|контроллер|cdj|xdj|ddj|микшер|mixer|pioneer|denon|numark|traktor|serato|вертушка|turntable|винил|колонки|акустика|мониторы|сабвуфер|наушники|продаю|продам|продаётся|б/у|бу|отдам"
 export STATE_FILE="$HOME/.hermes/scripts/tg-monitor-state.json"
 exec python3 "$HOME/.hermes/scripts/tg-monitor.py"
 EOF
@@ -66,54 +66,34 @@ hermes cron run <job_id>
 | `--max-posts`        | Сколько последних постов смотреть (по умолчанию 20)   |
 | `--dry-run`          | Не обновлять state                                    |
 
-## Пример уведомления (новый формат)
+## Пример уведомления
 
 ```
 🔔 *Новое совпадение*
 📢 `nyachang_uslugi`  ·  🕒 18.11 11:42
-🔑 ищу, нужен
+🔑 dj, controller, продаю
 
-*Ищу* человека на подработку, *нужен* опыт...
+Продаю *DJ*-*controller* Pioneer DDJ-400, состояние отличное...
 
 → https://t.me/nyachang_uslugi/12345
 ```
 
 Ключевые слова подсвечиваются жирным (`*слово*`).
 
-## Готовый промпт для Hermes
-
-Скопируй и отправь своему агенту:
+## Готовый промпт для Hermes (обновление ключевых слов)
 
 ```
-Нужно настроить мониторинг публичных Telegram-каналов по ключевым словам.
+Обнови ключевые слова в мониторинге Telegram-каналов.
 
-Репозиторий со скриптом:
-https://github.com/openclawromanaibot/telegram-channel-monitor
+Файл обёртки: ~/.hermes/scripts/tg-monitor-wrapper.sh
 
-Сделай следующее:
+Поставь такие KEYWORDS:
 
-1. Скачай monitor.py в ~/.hermes/scripts/tg-monitor.py
-2. Создай обёртку ~/.hermes/scripts/tg-monitor-wrapper.sh с такими настройками:
+dj|диджей|controller|контроллер|cdj|xdj|ddj|микшер|mixer|pioneer|denon|numark|traktor|serato|вертушка|turntable|винил|колонки|акустика|мониторы|сабвуфер|наушники|продаю|продам|продаётся|б/у|бу|отдам
 
-CHANNELS="nyachang_uslugi"
-KEYWORDS="ищу|нужен|требуется|работа|услуг|помогите"
-STATE_FILE="$HOME/.hermes/scripts/tg-monitor-state.json"
-
-3. Сделай оба файла исполняемыми.
-4. Создай script-only cron job:
-   - расписание: every 10m
-   - script: tg-monitor-wrapper.sh
-   - no_agent: true
-   - deliver: telegram:765151409
-   - name: tg-keyword-monitor
-
-5. Запусти задачу один раз для проверки (hermes cron run ...).
-
-Если что-то непонятно по репозиторию — сначала прочитай README:
-https://github.com/openclawromanaibot/telegram-channel-monitor/blob/main/README.md
+После изменения перезапусти задачу один раз для проверки:
+hermes cron run tg-keyword-monitor
 ```
-
-(Замени `CHANNELS`, `KEYWORDS` и `telegram:ID` на свои.)
 
 ## Рекомендации по расписанию
 
