@@ -19,14 +19,15 @@ import json
 import os
 import re
 import sys
-import time
 import urllib.request
+from datetime import datetime
 from html import unescape
 from pathlib import Path
 from urllib.error import URLError, HTTPError
 
 USER_AGENT = (
-    "Mozilla/5.0 (compatible; TelegramChannelMonitor/1.0; +https://github.com/openclawromanaibot/telegram-channel-monitor)"
+    "Mozilla/5.0 (compatible; TelegramChannelMonitor/1.0; "
+    "+https://github.com/openclawromanaibot/telegram-channel-monitor)"
 )
 
 
@@ -40,7 +41,6 @@ def fetch_channel(channel: str) -> str:
 def extract_posts(html: str, channel: str) -> list[dict]:
     """Extract posts from t.me/s/ HTML. Returns list of {id, text, url, date}."""
     posts = []
-    # Each message block roughly: data-post="channel/123" ... <div class="tgme_widget_message_text">...</div>
     pattern = re.compile(
         r'data-post="(?P<channel>[^"]+)/(?P<id>\d+)"'
         r'.*?class="tgme_widget_message_date".*?datetime="(?P<date>[^"]+)"'
@@ -49,7 +49,6 @@ def extract_posts(html: str, channel: str) -> list[dict]:
     )
     for m in pattern.finditer(html):
         body = m.group("body")
-        # Strip HTML tags
         text = re.sub(r"<[^>]+>", " ", body)
         text = unescape(re.sub(r"\s+", " ", text)).strip()
         if not text:
@@ -64,7 +63,6 @@ def extract_posts(html: str, channel: str) -> list[dict]:
                 "date": m.group("date"),
             }
         )
-    # Newest first usually; keep order as found
     return posts
 
 
@@ -89,10 +87,57 @@ def match_keywords(text: str, keywords: list[str]) -> list[str]:
         kw = kw.strip()
         if not kw:
             continue
-        # Support simple phrases; case-insensitive substring
         if kw.lower() in lower:
             found.append(kw)
     return found
+
+
+def format_date(iso_date: str) -> str:
+    """Make date human-readable."""
+    try:
+        # Telegram gives something like 2026-11-18T04:12:00+00:00
+        dt = datetime.fromisoformat(iso_date.replace("Z", "+00:00"))
+        return dt.strftime("%d.%m %H:%M")
+    except Exception:
+        return iso_date[:16]
+
+
+def highlight_keywords(text: str, keywords: list[str]) -> str:
+    """Simple highlight: wrap matched keywords in *bold* (Telegram markdown)."""
+    result = text
+    for kw in sorted(keywords, key=len, reverse=True):
+        if not kw:
+            continue
+        # case-insensitive replace, keep original case
+        pattern = re.compile(re.escape(kw), re.IGNORECASE)
+        result = pattern.sub(lambda m: f"*{m.group(0)}*", result)
+    return result
+
+
+def format_match(post: dict, found: list[str]) -> str:
+    """Pretty single notification block for Telegram."""
+    channel = post["channel"]
+    date_str = format_date(post["date"])
+    keywords_str = ", ".join(found)
+    text = post["text"]
+
+    # Truncate long texts nicely
+    max_len = 650
+    if len(text) > max_len:
+        text = text[: max_len - 1].rsplit(" ", 1)[0] + "…"
+
+    text = highlight_keywords(text, found)
+
+    lines = [
+        f"🔔 *Новое совпадение*",
+        f"📢 `{channel}`  ·  🕒 {date_str}",
+        f"🔑 {keywords_str}",
+        "",
+        text,
+        "",
+        f"→ {post['url']}",
+    ]
+    return "\n".join(lines)
 
 
 def main() -> int:
@@ -126,7 +171,6 @@ def main() -> int:
     args = parser.parse_args()
 
     channels = [c.strip().lstrip("@") for c in re.split(r"[,\s]+", args.channels) if c.strip()]
-    # Support both | and , as separators for keywords
     raw_kw = args.keywords.replace("|", ",")
     keywords = [k.strip() for k in raw_kw.split(",") if k.strip()]
 
@@ -139,7 +183,7 @@ def main() -> int:
 
     state_path = Path(args.state)
     state = load_state(state_path)
-    seen = state.setdefault("seen", {})  # channel -> set of post ids (as list in json)
+    seen = state.setdefault("seen", {})
 
     matches = []
 
@@ -160,27 +204,21 @@ def main() -> int:
             found = match_keywords(post["text"], keywords)
             if found:
                 matches.append((post, found))
-            # Always mark as seen so we don't re-process after the window moves
             channel_seen.add(pid)
 
-        # Keep only recent IDs to avoid unbounded growth (last ~50)
         seen[channel] = sorted(channel_seen, key=int, reverse=True)[:50]
 
     if matches:
-        # Newest first roughly
+        blocks = []
         for post, found in matches:
-            kw_str = ", ".join(found)
-            # Compact one-block message for Telegram
-            print(f"🔔 {post['channel']} · {post['date']}")
-            print(f"Keywords: {kw_str}")
-            print(post["text"][:800] + ("…" if len(post["text"]) > 800 else ""))
-            print(post["url"])
-            print("---")
+            blocks.append(format_match(post, found))
+
+        # Join with a clean separator
+        print("\n\n──────────────\n\n".join(blocks))
 
     if not args.dry_run:
         save_state(state_path, state)
 
-    # Exit 0 always; empty stdout = no notification from Hermes
     return 0
 
 
